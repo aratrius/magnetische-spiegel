@@ -1,0 +1,1321 @@
+<!DOCTYPE html>
+<html lang="nl">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Magnetische Spiegel Simulatie</title>
+    <!-- Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- FontAwesome Icons -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <!-- Three.js Library -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+    <!-- OrbitControls -->
+    <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/controls/OrbitControls.js"></script>
+
+    <!-- MathJax for Inline LaTeX Rendering -->
+    <script>
+        MathJax = {
+            tex: {
+                inlineMath: [['$', '$'], ['\\(', '\\)']]
+            },
+            svg: {
+                fontCache: 'global'
+            }
+        };
+    </script>
+    <script type="text/javascript" id="MathJax-script" async
+        src="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-svg.js">
+    </script>
+
+    <style>
+        body {
+            margin: 0;
+            overflow: hidden;
+            font-family: 'Inter', system-ui, -apple-system, sans-serif;
+            background-color: #0b0f19;
+            color: #f3f4f6;
+            user-select: none;
+        }
+        canvas {
+            display: block;
+            width: 100vw;
+            height: 100vh;
+        }
+        /* Glassmorphism panel style */
+        .glass-panel {
+            background: rgba(15, 23, 42, 0.85);
+            backdrop-filter: blur(12px);
+            -webkit-backdrop-filter: blur(12px);
+            border: 1px solid rgba(255, 255, 255, 0.12);
+            box-shadow: 0 20px 40px rgba(0, 0, 0, 0.5);
+        }
+        /* Custom scrollbars */
+        ::-webkit-scrollbar {
+            width: 6px;
+        }
+        ::-webkit-scrollbar-track {
+            background: rgba(15, 23, 42, 0.6);
+        }
+        ::-webkit-scrollbar-thumb {
+            background: rgba(100, 116, 139, 0.5);
+            border-radius: 4px;
+        }
+        ::-webkit-scrollbar-thumb:hover {
+            background: rgba(148, 163, 184, 0.8);
+        }
+        /* Custom Range Inputs */
+        input[type=range] {
+            accent-color: #38bdf8;
+        }
+
+        /* MathJax Inline Fix for Tailwind CSS */
+        mjx-container {
+            display: inline-block !important;
+            margin: 0 2px !important;
+        }
+        mjx-container[jax="SVG"] > svg,
+        mjx-container svg {
+            display: inline !important;
+            vertical-align: -0.15em;
+        }
+    </style>
+</head>
+<body class="relative w-screen h-screen overflow-hidden">
+
+    <!-- 3D Canvas Container -->
+    <div id="canvas-container" class="absolute inset-0 w-full h-full z-0"></div>
+
+    <!-- Top Header Bar -->
+    <header class="absolute top-4 left-4 right-4 z-10 flex flex-wrap items-center justify-between gap-4 p-4 rounded-2xl glass-panel">
+        <div class="flex items-center space-x-3">
+            <div>
+                <h1 class="text-lg md:text-xl font-bold tracking-wide text-white uppercase">MAGNETISCHE SPIEGEL SIMULATIE</h1>
+                <p class="text-xs text-slate-400">Visualisatie van het Magnetisch Spiegeleffect</p>
+            </div>
+        </div>
+
+        <!-- Status Indicator Badge -->
+        <div id="status-badge" class="px-3 py-1.5 rounded-full text-xs font-semibold flex items-center space-x-2 bg-emerald-500/20 text-emerald-300 border border-emerald-500/30">
+            <span class="w-2 h-2 rounded-full bg-emerald-400 animate-pulse"></span>
+            <span id="status-text">Spiraal & Spiegeling Actief</span>
+        </div>
+
+        <div class="flex items-center space-x-2">
+            <button id="btn-info-modal" class="px-3 py-1.5 text-xs font-medium bg-slate-800 hover:bg-slate-700 text-slate-200 rounded-lg border border-slate-600/50 transition">
+                <i class="fa-solid fa-circle-info mr-1.5 text-cyan-400"></i> OVER DEZE SIMULATIE
+            </button>
+            <button id="btn-theory-modal" class="px-3 py-1.5 text-xs font-medium bg-slate-800 hover:bg-slate-700 text-slate-200 rounded-lg border border-slate-600/50 transition">
+                <i class="fa-solid fa-book-open mr-1.5 text-cyan-400"></i> THEORIE
+            </button>
+            <button id="btn-toggle-left-head" class="px-3 py-1.5 text-xs font-medium bg-slate-800 hover:bg-slate-700 text-slate-200 rounded-lg border border-slate-600/50 transition">
+                <i class="fa-solid fa-sliders mr-1 text-cyan-400"></i> BESTURING <i id="icon-toggle-left" class="fa-solid fa-chevron-left ml-1 text-slate-400"></i>
+            </button>
+            <button id="btn-toggle-right-head" class="px-3 py-1.5 text-xs font-medium bg-slate-800 hover:bg-slate-700 text-slate-200 rounded-lg border border-slate-600/50 transition">
+                <i id="icon-toggle-right" class="fa-solid fa-chevron-right mr-1 text-slate-400"></i> DASHBOARD <i class="fa-solid fa-chart-line ml-1 text-emerald-400"></i>
+            </button>
+        </div>
+    </header>
+
+    <!-- UI Overlay Panels Container -->
+    <div id="ui-overlay" class="absolute inset-x-4 top-24 bottom-4 z-10 pointer-events-none flex justify-between gap-4 overflow-hidden">
+
+        <!-- LEFT PANEL: Controls & Physics Parameters -->
+        <div id="left-panel" class="pointer-events-auto relative w-full md:w-80 lg:w-96 flex flex-col gap-3 overflow-y-auto max-h-full pr-1 transition-transform duration-300 ease-in-out">
+            <!-- Collapse Handle Button Left -->
+            <button id="btn-collapse-left" class="absolute top-3 right-3 z-20 w-7 h-7 bg-slate-800/90 hover:bg-slate-700 text-slate-300 rounded-lg border border-slate-600/60 flex items-center justify-center transition shadow-md" title="Linker paneel inklappen">
+                <i class="fa-solid fa-chevron-left text-xs"></i>
+            </button>
+
+            <!-- Controls Block -->
+            <div class="p-4 rounded-2xl glass-panel">
+                <h2 class="text-xs font-bold uppercase tracking-wider text-cyan-400 mb-3 flex items-center">
+                    <i class="fa-solid fa-sliders mr-2"></i> BESTURING
+                </h2>
+                <div class="grid grid-cols-3 gap-2 mb-3">
+                    <button id="btn-play" class="py-2 px-3 bg-cyan-600 hover:bg-cyan-500 text-white rounded-xl font-medium text-xs flex items-center justify-center space-x-1.5 transition">
+                        <i id="play-icon" class="fa-solid fa-pause"></i>
+                        <span id="play-text">Pauze</span>
+                    </button>
+                    <button id="btn-step" class="py-2 px-3 bg-slate-800 hover:bg-slate-700 text-slate-200 rounded-xl font-medium text-xs flex items-center justify-center space-x-1.5 border border-slate-700 transition">
+                        <i class="fa-solid fa-step-forward"></i>
+                        <span>Stap</span>
+                    </button>
+                    <button id="btn-reset" class="py-2 px-3 bg-slate-800 hover:bg-slate-700 text-slate-200 rounded-xl font-medium text-xs flex items-center justify-center space-x-1.5 border border-slate-700 transition">
+                        <i class="fa-solid fa-rotate-left"></i>
+                        <span>Reset</span>
+                    </button>
+                </div>
+                <div>
+                    <div class="flex justify-between text-xs text-slate-300 mb-1">
+                        <span>Simulatiesnelheid:</span>
+                        <span id="val-speed" class="font-mono text-cyan-400">1.0x</span>
+                    </div>
+                    <input type="range" id="slider-speed" min="0.1" max="3.0" step="0.1" value="1.0" class="w-full cursor-pointer">
+                </div>
+            </div>
+
+            <!-- Presets Quick Select -->
+            <div class="p-4 rounded-2xl glass-panel">
+                <h2 class="text-xs font-bold uppercase tracking-wider text-amber-400 mb-2 flex items-center">
+                    <i class="fa-solid fa-wand-magic-sparkles mr-2"></i> SNELLE SCENARIO PRESETS
+                </h2>
+                <div class="grid grid-cols-2 gap-2 text-xs">
+                    <button id="preset-trapped" class="p-2 bg-slate-800 hover:bg-slate-700 text-left rounded-xl border border-slate-700/80 transition">
+                        <div class="font-bold text-slate-200">1. SPIEGELING</div>
+                        <div class="text-[10px] text-slate-400">Deeltje kaatst heen en weer</div>
+                    </button>
+                    <button id="preset-escape" class="p-2 bg-slate-800 hover:bg-slate-700 text-left rounded-xl border border-slate-700/80 transition">
+                        <div class="font-bold text-slate-200">2. VERLIESCONUS</div>
+                        <div class="text-[10px] text-slate-400">Kleine $v_\perp$, ontsnapt</div>
+                    </button>
+                    <button id="preset-homogeneous" class="p-2 bg-slate-800 hover:bg-slate-700 text-left rounded-xl border border-slate-700/80 transition">
+                        <div class="font-bold text-slate-200">3. HOMOGEEN VELD</div>
+                        <div class="text-[10px] text-slate-400">$k = 0$, uniforme spiraal</div>
+                    </button>
+                    <button id="preset-strong-pinch" class="p-2 bg-slate-800 hover:bg-slate-700 text-left rounded-xl border border-slate-700/80 transition">
+                        <div class="font-bold text-slate-200">4. STERKE VELDKNIJPING</div>
+                        <div class="text-[10px] text-slate-400">Hoge $k$, snelle spiegeling</div>
+                    </button>
+                </div>
+            </div>
+
+            <!-- Particle Parameters Block -->
+            <div class="p-4 rounded-2xl glass-panel">
+                <h2 class="text-xs font-bold uppercase tracking-wider text-cyan-400 mb-3 flex items-center">
+                    <i class="fa-solid fa-atom mr-2"></i> DEELTJE & LADING PARAMETERS
+                </h2>
+
+                <!-- Charge Slider -->
+                <div class="mb-3">
+                    <div class="flex justify-between text-xs text-slate-300 mb-1">
+                        <span>Lading ($q$):</span>
+                        <span id="val-q" class="font-mono text-rose-400">+1.0</span>
+                    </div>
+                    <input type="range" id="slider-q" min="-3.0" max="3.0" step="0.2" value="1.0" class="w-full cursor-pointer">
+                </div>
+
+                <!-- Mass Slider -->
+                <div class="mb-3">
+                    <div class="flex justify-between text-xs text-slate-300 mb-1">
+                        <span>Massa ($m$):</span>
+                        <span id="val-m" class="font-mono text-slate-200">1.0</span>
+                    </div>
+                    <input type="range" id="slider-m" min="0.2" max="3.0" step="0.1" value="1.0" class="w-full cursor-pointer">
+                </div>
+
+                <!-- Initial Velocity v_parallel -->
+                <div class="mb-3">
+                    <div class="flex justify-between text-xs text-slate-300 mb-1">
+                        <span>Axiale Snelheid ($v_\parallel = v_z$):</span>
+                        <span id="val-vpar" class="font-mono text-cyan-400">2.0</span>
+                    </div>
+                    <input type="range" id="slider-vpar" min="0.0" max="6.0" step="0.1" value="2.0" class="w-full cursor-pointer">
+                </div>
+
+                <!-- Initial Velocity v_perp -->
+                <div class="mb-3">
+                    <div class="flex justify-between text-xs text-slate-300 mb-1">
+                        <span>Gyratiesnelheid ($v_\perp$):</span>
+                        <span id="val-vperp" class="font-mono text-cyan-400">3.0</span>
+                    </div>
+                    <input type="range" id="slider-vperp" min="0.5" max="6.0" step="0.1" value="3.0" class="w-full cursor-pointer">
+                </div>
+
+                <!-- Start Position z0 -->
+                <div>
+                    <div class="flex justify-between text-xs text-slate-300 mb-1">
+                        <span>Beginpositie ($z_0$):</span>
+                        <span id="val-z0" class="font-mono text-slate-200">0.0</span>
+                    </div>
+                    <input type="range" id="slider-z0" min="-4.0" max="4.0" step="0.2" value="0.0" class="w-full cursor-pointer">
+                </div>
+            </div>
+
+            <!-- Magnetic Field Parameters -->
+            <div class="p-4 rounded-2xl glass-panel">
+                <h2 class="text-xs font-bold uppercase tracking-wider text-yellow-400 mb-3 flex items-center">
+                    <i class="fa-solid fa-wave-square mr-2"></i> MAGNEETVELD PARAMETERS
+                </h2>
+
+                <!-- Base B0 Field -->
+                <div class="mb-3">
+                    <div class="flex justify-between text-xs text-slate-300 mb-1">
+                        <span>Basisveldsterkte ($B_0$ op $z=0$):</span>
+                        <span id="val-b0" class="font-mono text-yellow-400">1.5</span>
+                    </div>
+                    <input type="range" id="slider-b0" min="0.5" max="4.0" step="0.1" value="1.5" class="w-full cursor-pointer">
+                </div>
+
+                <!-- Gradient Pinch k -->
+                <div>
+                    <div class="flex justify-between text-xs text-slate-300 mb-1">
+                        <span>Veldgradiënt / Knijpfactor ($k$):</span>
+                        <span id="val-k" class="font-mono text-yellow-400">0.08</span>
+                    </div>
+                    <input type="range" id="slider-k" min="0.00" max="0.25" step="0.01" value="0.08" class="w-full cursor-pointer">
+                </div>
+            </div>
+
+        </div>
+
+        <!-- Floating Left Expand Tab (Visible when left panel is collapsed) -->
+        <button id="btn-expand-left" class="pointer-events-auto hidden absolute left-0 top-1/2 -translate-y-1/2 z-20 bg-slate-900/90 hover:bg-slate-800 text-cyan-400 border border-slate-700/80 p-3 rounded-r-2xl shadow-2xl transition-all hover:pl-4 flex items-center space-x-2">
+            <i class="fa-solid fa-sliders text-sm"></i>
+            <i class="fa-solid fa-chevron-right text-xs"></i>
+        </button>
+
+        <!-- Floating Right Expand Tab (Visible when right panel is collapsed) -->
+        <button id="btn-expand-right" class="pointer-events-auto hidden absolute right-0 top-1/2 -translate-y-1/2 z-20 bg-slate-900/90 hover:bg-slate-800 text-emerald-400 border border-slate-700/80 p-3 rounded-l-2xl shadow-2xl transition-all hover:pr-4 flex items-center space-x-2">
+            <i class="fa-solid fa-chevron-left text-xs"></i>
+            <i class="fa-solid fa-chart-line text-sm"></i>
+        </button>
+
+        <!-- RIGHT PANEL: Vector Visibility & Dynamic Dashboard -->
+        <div id="right-panel" class="pointer-events-auto relative w-full md:w-80 lg:w-96 flex flex-col gap-3 overflow-y-auto max-h-full pl-1 transition-transform duration-300 ease-in-out ml-auto">
+            <!-- Collapse Handle Button Right -->
+            <button id="btn-collapse-right" class="absolute top-3 left-3 z-20 w-7 h-7 bg-slate-800/90 hover:bg-slate-700 text-slate-300 rounded-lg border border-slate-600/60 flex items-center justify-center transition shadow-md" title="Rechter paneel inklappen">
+                <i class="fa-solid fa-chevron-right text-xs"></i>
+            </button>
+
+            <!-- Vector Toggles Panel -->
+            <div class="p-4 rounded-2xl glass-panel">
+                <h2 class="text-xs font-bold uppercase tracking-wider text-emerald-400 mb-3 flex items-center justify-between">
+                    <span><i class="fa-solid fa-arrows-to-dot mr-2"></i> VECTOREN & VISUALISATIES</span>
+                </h2>
+
+                <div class="space-y-2 text-xs">
+                    <!-- Velocity Vector Main -->
+                    <label class="flex items-center justify-between p-2 rounded-xl bg-slate-800/80 border border-slate-700/60 cursor-pointer hover:bg-slate-800">
+                        <span class="flex items-center text-cyan-300 font-medium">
+                            <span class="w-2.5 h-2.5 rounded-full bg-cyan-400 inline-block mr-2"></span>
+                            Snelheidsvector ($\vec{v}$)
+                        </span>
+                        <input type="checkbox" id="chk-v" checked class="w-4 h-4 rounded">
+                    </label>
+
+                    <!-- Velocity Components -->
+                    <label class="flex items-center justify-between p-2 rounded-xl bg-slate-800/50 border border-slate-700/40 cursor-pointer hover:bg-slate-800 pl-6">
+                        <span class="text-slate-300">
+                            Componenten ($v_x, v_y, v_z$)
+                        </span>
+                        <input type="checkbox" id="chk-v-comp" class="w-4 h-4 rounded">
+                    </label>
+
+                    <!-- Lorentz Force Main -->
+                    <label class="flex items-center justify-between p-2 rounded-xl bg-slate-800/80 border border-slate-700/60 cursor-pointer hover:bg-slate-800">
+                        <span class="flex items-center text-orange-400 font-medium">
+                            <span class="w-2.5 h-2.5 rounded-full bg-orange-500 inline-block mr-2"></span>
+                            Lorentzkracht ($\vec{F}$)
+                        </span>
+                        <input type="checkbox" id="chk-f" checked class="w-4 h-4 rounded">
+                    </label>
+
+                    <!-- Force Components -->
+                    <label class="flex items-center justify-between p-2 rounded-xl bg-slate-800/50 border border-slate-700/40 cursor-pointer hover:bg-slate-800 pl-6">
+                        <span class="text-slate-300">
+                            Componenten ($F_x, F_y, F_z$)
+                        </span>
+                        <input type="checkbox" id="chk-f-comp" class="w-4 h-4 rounded">
+                    </label>
+
+                    <!-- Magnetic Field Vector B -->
+                    <label class="flex items-center justify-between p-2 rounded-xl bg-slate-800/80 border border-slate-700/60 cursor-pointer hover:bg-slate-800">
+                        <span class="flex items-center text-yellow-300 font-medium">
+                            <span class="w-2.5 h-2.5 rounded-full bg-yellow-400 inline-block mr-2"></span>
+                            Magneetveldvector ($\vec{B}$)
+                        </span>
+                        <input type="checkbox" id="chk-b" checked class="w-4 h-4 rounded">
+                    </label>
+
+                    <!-- Field Lines & Trail -->
+                    <div class="grid grid-cols-2 gap-2 pt-1">
+                        <label class="flex items-center justify-between p-2 rounded-xl bg-slate-800/60 border border-slate-700/50 cursor-pointer">
+                            <span class="text-slate-300">Veldlijnen</span>
+                            <input type="checkbox" id="chk-fieldlines" checked class="w-4 h-4 rounded">
+                        </label>
+                        <label class="flex items-center justify-between p-2 rounded-xl bg-slate-800/60 border border-slate-700/50 cursor-pointer">
+                            <span class="text-slate-300">Traject spoor</span>
+                            <input type="checkbox" id="chk-trail" checked class="w-4 h-4 rounded">
+                        </label>
+                    </div>
+
+                    <!-- Coordinate System (XYZ) -->
+                    <label class="flex items-center justify-between p-2 rounded-xl bg-slate-800/60 border border-slate-700/50 cursor-pointer">
+                        <span class="flex items-center text-slate-300">
+                            <i class="fa-solid fa-compass mr-2 text-cyan-400"></i> Coördinatenstelsel ($x,y,z$)
+                        </span>
+                        <input type="checkbox" id="chk-axes" checked class="w-4 h-4 rounded">
+                    </label>
+                </div>
+            </div>
+
+            <!-- Dynamic Physics Readouts Dashboard -->
+            <div class="p-4 rounded-2xl glass-panel">
+                <h2 class="text-xs font-bold uppercase tracking-wider text-cyan-400 mb-3 flex items-center justify-between">
+                    <span><i class="fa-solid fa-chart-line mr-2"></i> LIVE METINGEN</span>
+                </h2>
+
+                <div class="space-y-2 text-xs font-mono">
+                    <!-- Position Readout -->
+                    <div class="p-2 bg-slate-900/60 rounded-xl border border-slate-800">
+                        <div class="text-[10px] text-slate-400 uppercase tracking-wider font-sans mb-1">Positie $(x, y, z)$</div>
+                        <div class="flex justify-between text-slate-200">
+                            <span>x: <span id="out-x" class="text-cyan-300">0.00</span></span>
+                            <span>y: <span id="out-y" class="text-cyan-300">0.00</span></span>
+                            <span>z: <span id="out-z" class="text-yellow-300">0.00</span></span>
+                        </div>
+                    </div>
+
+                    <!-- Velocity Readout -->
+                    <div class="p-2 bg-slate-900/60 rounded-xl border border-slate-800">
+                        <div class="text-[10px] text-slate-400 uppercase tracking-wider font-sans mb-1">Snelheid $(v_x, v_y, v_z)$</div>
+                        <div class="flex justify-between text-slate-200">
+                            <span>v<sub>x</sub>: <span id="out-vx">0.00</span></span>
+                            <span>v<sub>y</sub>: <span id="out-vy">0.00</span></span>
+                            <span>v<sub>z</sub>: <span id="out-vz" class="text-cyan-300">0.00</span></span>
+                        </div>
+                    </div>
+
+                    <!-- Force Components Readout -->
+                    <div class="p-2 bg-slate-900/60 rounded-xl border border-slate-800">
+                        <div class="text-[10px] text-slate-400 uppercase tracking-wider font-sans mb-1">Lorentzkracht $(F_x, F_y, F_z)$</div>
+                        <div class="flex justify-between text-slate-200">
+                            <span>F<sub>x</sub>: <span id="out-fx">0.00</span></span>
+                            <span>F<sub>y</sub>: <span id="out-fy">0.00</span></span>
+                            <span>F<sub>z</sub>: <span id="out-fz" class="text-orange-400">0.00</span></span>
+                        </div>
+                    </div>
+
+                    <!-- Field Strength & Energy -->
+                    <div class="grid grid-cols-2 gap-2">
+                        <div class="p-2 bg-slate-900/60 rounded-xl border border-slate-800">
+                            <div class="text-[10px] text-slate-400 font-sans">Veldsterkte $|B|$</div>
+                            <div id="out-bmag" class="text-sm font-bold text-yellow-400">1.50</div>
+                        </div>
+                        <div class="p-2 bg-slate-900/60 rounded-xl border border-slate-800">
+                            <div class="text-[10px] text-slate-400 font-sans">Kinetische Energ. $E_k$</div>
+                            <div id="out-ek" class="text-sm font-bold text-emerald-400">6.50</div>
+                        </div>
+                    </div>
+
+                    <!-- Pitch Angle & Loss Cone -->
+                    <div class="p-2 bg-slate-900/60 rounded-xl border border-slate-800 text-slate-300 font-sans">
+                        <div class="flex justify-between text-[11px] mb-1">
+                            <span>Hellingshoek ($\alpha$):</span>
+                            <span id="out-alpha" class="font-bold font-mono text-cyan-300">56.3°</span>
+                        </div>
+                        <div class="flex justify-between text-[11px] mb-1">
+                            <span>Kritische Verlieshoek ($\alpha_c$):</span>
+                            <span id="out-alphac" class="font-bold font-mono text-amber-400">32.1°</span>
+                        </div>
+                        <div class="flex justify-between text-[11px]">
+                            <span>Theoretisch Spiegelpunt $z_m$:</span>
+                            <span id="out-zmirror" class="font-bold font-mono text-emerald-400">± 2.36</span>
+                        </div>
+                    </div>
+
+                </div>
+            </div>
+
+        </div>
+    </div>
+
+    <!-- THEORY EXPLANATION MODAL -->
+    <div id="modal-theory" class="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/70 backdrop-blur-sm hidden">
+        <div class="bg-slate-900 border border-slate-700 max-w-2xl w-full max-h-[85vh] rounded-2xl p-6 overflow-y-auto text-slate-200 shadow-2xl relative">
+            <button id="btn-close-modal" class="absolute top-4 right-4 text-slate-400 hover:text-white text-xl p-2">
+                <i class="fa-solid fa-xmark"></i>
+            </button>
+            <h2 class="text-xl font-bold text-cyan-400 mb-4 flex items-center uppercase">
+                <i class="fa-solid fa-graduation-cap mr-2"></i> MAGNETISCH SPIEGELEFFECT
+            </h2>
+
+            <div class="space-y-4 text-sm leading-relaxed text-slate-300">
+                <p>
+                    Een <strong>Magnetische Spiegel (Magnetic Mirror)</strong> ontstaat wanneer een geladen deeltje in een magneetveld beweegt waarvan de veldlijnen naar de uiteinden toe dichter bij elkaar komen (het veld wordt daar sterker).
+                </p>
+
+                <div class="p-3 bg-slate-800/80 rounded-xl border border-slate-700">
+                    <h3 class="font-bold text-white mb-1 uppercase">1. De Terugdrijvende lorentzkracht</h3>
+                    <p class="text-xs text-slate-300">
+                        Omdat de veldlijnen aan de uiteinden schuin naar binnen lopen, staat de lorentzkracht $\vec{F} = q(\vec{v} \times \vec{B})$ niet meer puur loodrecht op de z-as. Er ontstaat een krachtcomponent $F_z$ die het deeltje steeds terugduwt naar het midden (waar het veld zwakker is).
+                      </br>(In deze simulatie is er geen elektrisch veld. De lorentzkracht $\vec{F}_L= \vec{F}_E + \vec{F}_B$ is dus gelijk aan de magnetische kracht $\vec{F}_L= \vec{F}_B$.
+                    </p>
+                </div>
+
+                <div class="p-3 bg-slate-800/80 rounded-xl border border-slate-700">
+                    <h3 class="font-bold text-white mb-1 uppercase">2. Energie-uitwisseling ($v_\parallel \to v_\perp$)</h3>
+                    <p class="text-xs text-slate-300">
+                        De totale kinetische energie van het deeltje blijft constant. Zodra het deeltje naar een sterker veld beweegt, gaat er meer energie in de snellere ronddraaiende beweging ($v_\perp$) zitten. Hierdoor moet de voorwaartse snelheid ($v_\parallel$) afnemen totdat deze $0$ wordt: het deeltje kaatst om!
+                    </p>
+                </div>
+
+                <div class="p-3 bg-slate-800/80 rounded-xl border border-slate-700">
+                    <h3 class="font-bold text-white mb-1 uppercase">3. De Verliesconus ($\alpha_c$)</h3>
+                    <p class="text-xs text-slate-300">
+                        Als een deeltje te veel voorwaartse snelheid ($v_\parallel$) heeft ten opzichte van zijn draaisnelheid ($v_\perp$), is de hoek $\alpha$ te klein. Het deeltje vliegt dan door de spiegel heen en ontsnapt.
+                    </p>
+                </div>
+            </div>
+
+            <div class="mt-6 text-right">
+                <button id="btn-close-modal-bottom" class="px-4 py-2 bg-cyan-600 hover:bg-cyan-500 text-white font-medium text-xs rounded-xl transition">
+                    BEGREPEN / SLUITEN
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- ABOUT SIMULATION MODAL -->
+    <div id="modal-info" class="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/70 backdrop-blur-sm hidden">
+        <div class="bg-slate-900 border border-slate-700 max-w-2xl w-full max-h-[85vh] rounded-2xl p-6 overflow-y-auto text-slate-200 shadow-2xl relative">
+            <button id="btn-close-info-modal" class="absolute top-4 right-4 text-slate-400 hover:text-white text-xl p-2">
+                <i class="fa-solid fa-xmark"></i>
+            </button>
+            <h2 class="text-xl font-bold text-cyan-400 mb-4 flex items-center uppercase">
+                <i class="fa-solid fa-circle-info mr-2"></i> OVER DEZE SIMULATIE & HANDLEIDING
+            </h2>
+
+            <div class="space-y-4 text-sm leading-relaxed text-slate-300">
+                <p>
+                    Deze simulatie visualiseert de 3D-beweging van een geladen deeltje in een <strong>inhomogeen magneetveld</strong> dat aan de uiteinden sterker wordt (de zogenaamde <em>magnetische spiegel</em> of <em>magnetische fles</em>).
+                </p>
+
+                <!-- Handleiding & Functionaliteiten -->
+                <div class="p-3 bg-slate-800/80 rounded-xl border border-slate-700">
+                    <h3 class="font-bold text-white mb-1.5 flex items-center text-cyan-300 uppercase">
+                        <i class="fa-solid fa-sliders mr-2"></i> Wat kun je allemaal instellen?
+                    </h3>
+                    <ul class="list-disc list-inside text-xs space-y-1 text-slate-300">
+                        <li><strong>Vectoren & Componenten:</strong> Bekijk de snelheidsvector ($\vec{v}$), de lorentzkracht ($\vec{F}$) en het magneetveld ($\vec{B}$). Schakel de losse $(x,y,z)$-componenten in om te zien hoe de terugdrijvende kracht $F_z$ ontstaat.</li>
+                        <li><strong>Deeltjeseigenschappen:</strong> Pas de lading $q$ aan (positief of negatief), de massa $m$ en de initiële snelheden ($v_\parallel$ rechtdoor, $v_\perp$ in het draaivlak).</li>
+                        <li><strong>Veldgradiënt ($k$):</strong> Bepaal hoe snel het magneetveld naar buiten toe sterker wordt. Zet $k = 0$ voor een homogeen veld!</li>
+                        <li><strong>Presets:</strong> Gebruik de snelknoppen om direct het verschil te zien tussen <em>Spiegeling</em>, <em>Ontsnappen via de verliesconus</em> en een <em>Homogeen veld</em>.</li>
+                    </ul>
+                </div>
+
+                <!-- Eenheden opmerking -->
+                <div class="p-3 bg-slate-800/80 rounded-xl border border-slate-700">
+                    <h3 class="font-bold text-white mb-1 text-amber-300 flex items-center uppercase">
+                        <i class="fa-solid fa-ruler-combined mr-2"></i> Arbitraire Eenheden
+                    </h3>
+                    <p class="text-xs text-slate-300">
+                        Om de natuurkundige principes en krachten duidelijk en overzichtelijk te houden op een normale schaal, gebruikt deze simulatie <strong>arbitraire eenheden</strong> (relatieve waarden). Je leert zo de fysische verhoudingen en effecten te begrijpen zonder belemmerd te worden door hele kleine machtsverheffingen.
+                    </p>
+                </div>
+
+                <!-- Experimenteer & Ontdek opdrachten -->
+                <div class="p-3 bg-slate-800/80 rounded-xl border border-slate-700">
+                    <h3 class="font-bold text-white mb-1.5 flex items-center text-emerald-400 uppercase">
+                        <i class="fa-solid fa-flask mr-2"></i> Experimenteer & Ontdek!
+                    </h3>
+                    <ol class="list-decimal list-inside text-xs space-y-1.5 text-slate-300">
+                        <li><strong>Wat gebeurt er bij $k = 0$?</strong> Zet de knijpfactor $k$ op 0. Wat valt je op aan de krachtcomponent $F_z$ en de spoed van de spiraal?</li>
+                        <li><strong>Draairichting van de lading:</strong> Maak lading $q$ negatief (bijv. $-1.0$). In welke richting roteert het deeltje vergeleken met een positieve lading?</li>
+                        <li><strong>Ontsnappingsgrens:</strong> Maak de voorwaartse snelheid $v_\parallel$ veel groter dan de draaisnelheid $v_\perp$. Vliegt het deeltje door de spiegel heen?</li>
+                    </ol>
+                </div>
+            </div>
+
+            <div class="mt-6 text-right">
+                <button id="btn-close-info-modal-bottom" class="px-4 py-2 bg-cyan-600 hover:bg-cyan-500 text-white font-medium text-xs rounded-xl transition">
+                    BEGREPEN / SLUITEN
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- MAIN JAVASCRIPT LOGIC -->
+    <script>
+        // --- VectorArrow Helper Class ---
+        class CustomArrow {
+            constructor(scene, color, headWidth = 0.35, headLength = 0.5) {
+                this.group = new THREE.Group();
+
+                const cylinderGeo = new THREE.CylinderGeometry(0.06, 0.06, 1, 12);
+                cylinderGeo.translate(0, 0.5, 0); // shift origin to base
+
+                const coneGeo = new THREE.ConeGeometry(headWidth, headLength, 12);
+                coneGeo.translate(0, headLength / 2, 0);
+
+                const material = new THREE.MeshStandardMaterial({
+                    color: color,
+                    roughness: 0.3,
+                    metalness: 0.8,
+                    emissive: color,
+                    emissiveIntensity: 0.4
+                });
+
+                this.shaft = new THREE.Mesh(cylinderGeo, material);
+                this.head = new THREE.Mesh(coneGeo, material);
+
+                this.group.add(this.shaft);
+                this.group.add(this.head);
+                scene.add(this.group);
+
+                this.visible = true;
+                this.group.visible = true;
+            }
+
+            update(origin, vector, scale = 1.0) {
+                if (!this.visible || vector.lengthSq() < 1e-7) {
+                    this.group.visible = false;
+                    return;
+                }
+
+                this.group.visible = true;
+                this.group.position.copy(origin);
+
+                const len = vector.length() * scale;
+                if (len < 0.01) {
+                    this.group.visible = false;
+                    return;
+                }
+
+                const dir = vector.clone().normalize();
+                const up = new THREE.Vector3(0, 1, 0);
+                const quaternion = new THREE.Quaternion().setFromUnitVectors(up, dir);
+                this.group.quaternion.copy(quaternion);
+
+                const headLen = Math.min(0.4, len * 0.3);
+                const shaftLen = Math.max(0.001, len - headLen);
+
+                this.shaft.scale.set(1, shaftLen, 1);
+                this.shaft.position.set(0, 0, 0);
+
+                this.head.scale.set(1, headLen / 0.4, 1);
+                this.head.position.set(0, shaftLen, 0);
+            }
+
+            setVisible(vis) {
+                this.visible = vis;
+                this.group.visible = vis;
+            }
+        }
+
+        // --- GLOBAL APP STATE ---
+        const state = {
+            isPlaying: true,
+            simSpeed: 1.0,
+            q: 1.0,
+            m: 1.0,
+            vPar: 2.0,
+            vPerp: 3.0,
+            z0: 0.0,
+            B0: 1.5,
+            k: 0.08,
+            maxL: 6.0,
+            // Vector Toggles
+            showV: true,
+            showVComp: false,
+            showF: true,
+            showFComp: false,
+            showB: true,
+            showFieldLines: true,
+            showTrail: true,
+            showAxes: true
+        };
+
+        // Deeltjes fysische positie & snelheid
+        const particlePos = new THREE.Vector3(0, 0, 0);
+        const particleVel = new THREE.Vector3(0, 0, 0);
+
+        // Three.js Globals
+        let scene, camera, renderer, controls;
+        let particleMesh, particleLight, trailLine, trailGeometry;
+        let fieldLinesGroup, chokeRingsGroup, axesGroup;
+
+        // Vector Arrow Helpers
+        let arrowV, arrowVx, arrowVy, arrowVz;
+        let arrowF, arrowFx, arrowFy, arrowFz;
+        let arrowB;
+
+        // Trajectory points buffer
+        const maxTrailPoints = 2000;
+        let trailPoints = [];
+
+        // Integratie Sub-stepping
+        const baseDt = 0.01;
+
+        // --- INITIALIZATION ---
+        window.onload = function() {
+            initThreeJS();
+            setupVectorHelpers();
+            setupUIEventListeners();
+            resetSimulation();
+            animate();
+        };
+
+        function initThreeJS() {
+            const container = document.getElementById('canvas-container');
+
+            // Scene Setup
+            scene = new THREE.Scene();
+            scene.background = new THREE.Color(0x0b0f19);
+            scene.fog = new THREE.FogExp2(0x0b0f19, 0.025);
+
+            // Camera Setup
+            camera = new THREE.PerspectiveCamera(45, window.innerWidth / window.innerHeight, 0.1, 100);
+            camera.position.set(10, 8, 14);
+
+            // Renderer Setup
+            renderer = new THREE.WebGLRenderer({ antialias: true });
+            renderer.setSize(window.innerWidth, window.innerHeight);
+            renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+            renderer.shadowMap.enabled = true;
+            container.appendChild(renderer.domElement);
+
+            // Controls
+            controls = new THREE.OrbitControls(camera, renderer.domElement);
+            controls.enableDamping = true;
+            controls.dampingFactor = 0.05;
+            controls.maxDistance = 45;
+            controls.minDistance = 3;
+
+            // Lights
+            const ambientLight = new THREE.AmbientLight(0xffffff, 0.6);
+            scene.add(ambientLight);
+
+            const dirLight = new THREE.DirectionalLight(0xffffff, 0.8);
+            dirLight.position.set(10, 20, 15);
+            scene.add(dirLight);
+
+            // Grid & Coordinate Guide
+            const gridHelper = new THREE.GridHelper(30, 30, 0x1e293b, 0x0f172a);
+            gridHelper.position.y = -5;
+            scene.add(gridHelper);
+
+            // Particle Mesh (Glowing Sphere)
+            const particleGeo = new THREE.SphereGeometry(0.25, 32, 32);
+            const particleMat = new THREE.MeshStandardMaterial({
+                color: 0xef4444,
+                emissive: 0xef4444,
+                emissiveIntensity: 0.6,
+                roughness: 0.2,
+                metalness: 0.8
+            });
+            particleMesh = new THREE.Mesh(particleGeo, particleMat);
+            scene.add(particleMesh);
+
+            // Dynamic Point Light on Particle
+            particleLight = new THREE.PointLight(0xef4444, 2, 8);
+            particleMesh.add(particleLight);
+
+            // Trajectory Trail Line Setup
+            trailGeometry = new THREE.BufferGeometry();
+            const trailMat = new THREE.LineBasicMaterial({
+                color: 0x38bdf8,
+                linewidth: 2,
+                transparent: true,
+                opacity: 0.85
+            });
+            trailLine = new THREE.Line(trailGeometry, trailMat);
+            scene.add(trailLine);
+
+            // Groups for field lines & choke markers
+            fieldLinesGroup = new THREE.Group();
+            scene.add(fieldLinesGroup);
+
+            chokeRingsGroup = new THREE.Group();
+            scene.add(chokeRingsGroup);
+
+            // Create Labeled Coordinate System (XYZ Axes)
+            createCoordinateAxes();
+
+            // Window Resize Listener
+            window.addEventListener('resize', onWindowResize);
+
+            // Render Magneetveldlijnen
+            rebuildFieldLines();
+        }
+
+        function setupVectorHelpers() {
+            // Main Snelheidsvector (Cyan)
+            arrowV = new CustomArrow(scene, 0x06b6d4, 0.35, 0.45);
+
+            // Snelheidscomponenten
+            arrowVx = new CustomArrow(scene, 0xf43f5e, 0.2, 0.3);
+            arrowVy = new CustomArrow(scene, 0x10b981, 0.2, 0.3);
+            arrowVz = new CustomArrow(scene, 0x0284c7, 0.2, 0.3);
+
+            // Main Lorentz-kracht (Orange)
+            arrowF = new CustomArrow(scene, 0xf97316, 0.38, 0.5);
+
+            // Krachtcomponenten
+            arrowFx = new CustomArrow(scene, 0xf43f5e, 0.2, 0.3);
+            arrowFy = new CustomArrow(scene, 0x10b981, 0.2, 0.3);
+            arrowFz = new CustomArrow(scene, 0xeab308, 0.25, 0.35);
+
+            // Magnetic Field Vector B (Yellow)
+            arrowB = new CustomArrow(scene, 0xeab308, 0.3, 0.4);
+        }
+
+        function createCoordinateAxes() {
+            axesGroup = new THREE.Group();
+            const axisLength = 3.5;
+
+            // X Axis (Red)
+            const arrowX = new THREE.ArrowHelper(new THREE.Vector3(1, 0, 0), new THREE.Vector3(0, 0, 0), axisLength, 0xf43f5e, 0.4, 0.25);
+            axesGroup.add(arrowX);
+
+            // Y Axis (Green)
+            const arrowY = new THREE.ArrowHelper(new THREE.Vector3(0, 1, 0), new THREE.Vector3(0, 0, 0), axisLength, 0x10b981, 0.4, 0.25);
+            axesGroup.add(arrowY);
+
+            // Z Axis (Cyan / Blue)
+            const arrowZ = new THREE.ArrowHelper(new THREE.Vector3(0, 0, 1), new THREE.Vector3(0, 0, 0), axisLength, 0x38bdf8, 0.4, 0.25);
+            axesGroup.add(arrowZ);
+
+            function makeTextSprite(text, colorHex) {
+                const canvas = document.createElement('canvas');
+                canvas.width = 128;
+                canvas.height = 128;
+                const ctx = canvas.getContext('2d');
+                ctx.font = 'Bold 80px sans-serif';
+                ctx.fillStyle = colorHex;
+                ctx.textAlign = 'center';
+                ctx.textBaseline = 'middle';
+                ctx.fillText(text, 64, 64);
+
+                const texture = new THREE.CanvasTexture(canvas);
+                const spriteMat = new THREE.SpriteMaterial({ map: texture, transparent: true });
+                const sprite = new THREE.Sprite(spriteMat);
+                sprite.scale.set(0.9, 0.9, 1);
+                return sprite;
+            }
+
+            const spriteX = makeTextSprite('X', '#f43f5e');
+            spriteX.position.set(axisLength + 0.4, 0, 0);
+            axesGroup.add(spriteX);
+
+            const spriteY = makeTextSprite('Y', '#10b981');
+            spriteY.position.set(0, axisLength + 0.4, 0);
+            axesGroup.add(spriteY);
+
+            const spriteZ = makeTextSprite('Z', '#38bdf8');
+            spriteZ.position.set(0, 0, axisLength + 0.4);
+            axesGroup.add(spriteZ);
+
+            scene.add(axesGroup);
+        }
+
+        // --- MAGNETIC FIELD MATHEMATICS ---
+        function getMagneticField(pos) {
+            const Bx = -state.k * state.B0 * pos.x * pos.z;
+            const By = -state.k * state.B0 * pos.y * pos.z;
+            const Bz = state.B0 * (1 + state.k * pos.z * pos.z);
+            return new THREE.Vector3(Bx, By, Bz);
+        }
+
+        function rebuildFieldLines() {
+            while(fieldLinesGroup.children.length > 0){
+                const obj = fieldLinesGroup.children.pop();
+                if(obj.geometry) obj.geometry.dispose();
+            }
+            while(chokeRingsGroup.children.length > 0){
+                const obj = chokeRingsGroup.children.pop();
+                if(obj.geometry) obj.geometry.dispose();
+            }
+
+            if(!state.showFieldLines) return;
+
+            const radii = [1.2, 2.4, 3.6];
+            const linesPerRing = 10;
+            const L = state.maxL;
+            const steps = 100;
+
+            radii.forEach(R0 => {
+                for(let i = 0; i < linesPerRing; i++) {
+                    const theta = (i / linesPerRing) * Math.PI * 2;
+                    const points = [];
+
+                    for(let s = 0; s <= steps; s++) {
+                        const z = -L + (s / steps) * (2 * L);
+                        const r = R0 / Math.sqrt(1 + state.k * z * z);
+                        const x = r * Math.cos(theta);
+                        const y = r * Math.sin(theta);
+                        points.push(new THREE.Vector3(x, y, z));
+                    }
+
+                    const curve = new THREE.CatmullRomCurve3(points);
+                    const tubeGeo = new THREE.TubeGeometry(curve, 70, 0.03, 8, false);
+                    const tubeMat = new THREE.MeshBasicMaterial({
+                        color: 0x00d2ff,
+                        transparent: true,
+                        opacity: 0.35
+                    });
+                    const tubeMesh = new THREE.Mesh(tubeGeo, tubeMat);
+                    fieldLinesGroup.add(tubeMesh);
+                }
+            });
+
+            if (state.k > 0) {
+                [-L, L].forEach(zPos => {
+                    const chokeRadius = radii[1] / Math.sqrt(1 + state.k * zPos * zPos);
+                    const ringGeo = new THREE.TorusGeometry(chokeRadius, 0.05, 16, 64);
+                    const ringMat = new THREE.MeshBasicMaterial({
+                        color: 0xa855f7,
+                        transparent: true,
+                        opacity: 0.6
+                    });
+                    const ringMesh = new THREE.Mesh(ringGeo, ringMat);
+                    ringMesh.position.z = zPos;
+                    chokeRingsGroup.add(ringMesh);
+                });
+            }
+        }
+
+        // --- NUMERICAL INTEGRATION (RK4 Runge-Kutta) ---
+        function getAcceleration(pos, vel) {
+            const B = getMagneticField(pos);
+            const Fx = state.q * (vel.y * B.z - vel.z * B.y);
+            const Fy = state.q * (vel.z * B.x - vel.x * B.z);
+            const Fz = state.q * (vel.x * B.y - vel.y * B.x);
+
+            return new THREE.Vector3(Fx / state.m, Fy / state.m, Fz / state.m);
+        }
+
+        function rk4Step(dt) {
+            const r1 = particlePos.clone();
+            const v1 = particleVel.clone();
+            const a1 = getAcceleration(r1, v1);
+
+            const r2 = r1.clone().addScaledVector(v1, dt * 0.5);
+            const v2 = v1.clone().addScaledVector(a1, dt * 0.5);
+            const a2 = getAcceleration(r2, v2);
+
+            const r3 = r1.clone().addScaledVector(v2, dt * 0.5);
+            const v3 = v1.clone().addScaledVector(a2, dt * 0.5);
+            const a3 = getAcceleration(r3, v3);
+
+            const r4 = r1.clone().addScaledVector(v3, dt);
+            const v4 = v1.clone().addScaledVector(a3, dt);
+            const a4 = getAcceleration(r4, v4);
+
+            particlePos.x += (dt / 6) * (v1.x + 2*v2.x + 2*v3.x + v4.x);
+            particlePos.y += (dt / 6) * (v1.y + 2*v2.y + 2*v3.y + v4.y);
+            particlePos.z += (dt / 6) * (v1.z + 2*v2.z + 2*v3.z + v4.z);
+
+            particleVel.x += (dt / 6) * (a1.x + 2*a2.x + 2*a3.x + a4.x);
+            particleVel.y += (dt / 6) * (a1.y + 2*a2.y + 2*a3.y + a4.y);
+            particleVel.z += (dt / 6) * (a1.z + 2*a2.z + 2*a3.z + a4.z);
+        }
+
+        function togglePlay(play) {
+            if (play !== undefined) {
+                state.isPlaying = play;
+            } else {
+                state.isPlaying = !state.isPlaying;
+            }
+            const icon = document.getElementById('play-icon');
+            const text = document.getElementById('play-text');
+            if (state.isPlaying) {
+                if(icon) icon.className = "fa-solid fa-pause";
+                if(text) text.textContent = "Pauze";
+            } else {
+                if(icon) icon.className = "fa-solid fa-play";
+                if(text) text.textContent = "Start";
+            }
+        }
+
+        // --- RESET SIMULATION ---
+        function resetSimulation() {
+            particlePos.set(0.5, 0, state.z0);
+            particleVel.set(0, state.vPerp, state.vPar);
+
+            trailPoints = [];
+            updateTrailBuffer();
+
+            updateParticleColor();
+            updateGraphicsAndDashboard();
+        }
+
+        function updateParticleColor() {
+            const isPos = state.q >= 0;
+            const hexColor = isPos ? 0xef4444 : 0x38bdf8;
+            particleMesh.material.color.setHex(hexColor);
+            particleMesh.material.emissive.setHex(hexColor);
+            particleLight.color.setHex(hexColor);
+
+            const valQEl = document.getElementById('val-q');
+            if(valQEl) {
+                valQEl.className = isPos ? "font-mono text-rose-400" : "font-mono text-sky-400";
+                valQEl.textContent = (state.q >= 0 ? "+" : "") + state.q.toFixed(1);
+            }
+        }
+
+        // --- ANIMATION LOOP ---
+        function animate() {
+            requestAnimationFrame(animate);
+
+            if (state.isPlaying) {
+                const subSteps = 12;
+                const dt = (baseDt * state.simSpeed) / subSteps;
+
+                for (let i = 0; i < subSteps; i++) {
+                    rk4Step(dt);
+
+                    if (Math.abs(particlePos.z) > state.maxL * 1.5) {
+                        togglePlay(false);
+                        break;
+                    }
+                }
+
+                trailPoints.push(particlePos.clone());
+                if (trailPoints.length > maxTrailPoints) {
+                    trailPoints.shift();
+                }
+                updateTrailBuffer();
+            }
+
+            controls.update();
+            updateGraphicsAndDashboard();
+            renderer.render(scene, camera);
+        }
+
+        function updateTrailBuffer() {
+            if (!state.showTrail) {
+                trailGeometry.setFromPoints([]);
+                return;
+            }
+            trailGeometry.setFromPoints(trailPoints);
+        }
+
+        function updateGraphicsAndDashboard() {
+            particleMesh.position.copy(particlePos);
+
+            const B = getMagneticField(particlePos);
+            const Bmag = B.length();
+
+            const F = new THREE.Vector3(
+                state.q * (particleVel.y * B.z - particleVel.z * B.y),
+                state.q * (particleVel.z * B.x - particleVel.x * B.z),
+                state.q * (particleVel.x * B.y - particleVel.y * B.x)
+            );
+
+            const scaleV = 0.35;
+            const scaleF = 0.25;
+            const scaleB = 0.35;
+
+            arrowV.setVisible(state.showV);
+            arrowV.update(particlePos, particleVel, scaleV);
+
+            arrowVx.setVisible(state.showVComp);
+            arrowVx.update(particlePos, new THREE.Vector3(particleVel.x, 0, 0), scaleV);
+
+            arrowVy.setVisible(state.showVComp);
+            arrowVy.update(particlePos, new THREE.Vector3(0, particleVel.y, 0), scaleV);
+
+            arrowVz.setVisible(state.showVComp);
+            arrowVz.update(particlePos, new THREE.Vector3(0, 0, particleVel.z), scaleV);
+
+            arrowF.setVisible(state.showF);
+            arrowF.update(particlePos, F, scaleF);
+
+            arrowFx.setVisible(state.showFComp);
+            arrowFx.update(particlePos, new THREE.Vector3(F.x, 0, 0), scaleF);
+
+            arrowFy.setVisible(state.showFComp);
+            arrowFy.update(particlePos, new THREE.Vector3(0, F.y, 0), scaleF);
+
+            arrowFz.setVisible(state.showFComp);
+            arrowFz.update(particlePos, new THREE.Vector3(0, 0, F.z), scaleF);
+
+            arrowB.setVisible(state.showB);
+            arrowB.update(particlePos, B, scaleB);
+
+            if(axesGroup) axesGroup.visible = state.showAxes;
+
+            const vMag = particleVel.length();
+            const B_unit = B.clone().normalize();
+            const vPar_current = particleVel.dot(B_unit);
+            const vPerp_sq = Math.max(0, vMag * vMag - vPar_current * vPar_current);
+            const vPerp_current = Math.sqrt(vPerp_sq);
+
+            const Ek = 0.5 * state.m * vMag * vMag;
+
+            const alphaRad = Math.atan2(vPerp_current, Math.abs(vPar_current));
+            const alphaDeg = (alphaRad * 180) / Math.PI;
+
+            const Bmax = state.B0 * (1 + state.k * state.maxL * state.maxL);
+            const lossConeRad = Math.asin(Math.min(1.0, Math.sqrt(state.B0 / Bmax)));
+            const lossConeDeg = (lossConeRad * 180) / Math.PI;
+
+            let zMirrorText = "Geen (Ontsnapt)";
+            if (state.k > 0 && state.vPerp > 0.05) {
+                const zM = (1 / Math.sqrt(state.k)) * (state.vPar / state.vPerp);
+                if (zM < state.maxL) {
+                    zMirrorText = "± " + zM.toFixed(2);
+                }
+            }
+
+            document.getElementById('out-x').textContent = particlePos.x.toFixed(2);
+            document.getElementById('out-y').textContent = particlePos.y.toFixed(2);
+            document.getElementById('out-z').textContent = particlePos.z.toFixed(2);
+
+            document.getElementById('out-vx').textContent = particleVel.x.toFixed(2);
+            document.getElementById('out-vy').textContent = particleVel.y.toFixed(2);
+            document.getElementById('out-vz').textContent = particleVel.z.toFixed(2);
+
+            document.getElementById('out-fx').textContent = F.x.toFixed(2);
+            document.getElementById('out-fy').textContent = F.y.toFixed(2);
+            document.getElementById('out-fz').textContent = F.z.toFixed(2);
+
+            document.getElementById('out-bmag').textContent = Bmag.toFixed(2);
+            document.getElementById('out-ek').textContent = Ek.toFixed(2);
+
+            document.getElementById('out-alpha').textContent = alphaDeg.toFixed(1) + "°";
+            document.getElementById('out-alphac').textContent = state.k > 0 ? lossConeDeg.toFixed(1) + "°" : "Geen";
+            document.getElementById('out-zmirror').textContent = zMirrorText;
+
+            const badge = document.getElementById('status-badge');
+            const badgeText = document.getElementById('status-text');
+
+            if (Math.abs(particlePos.z) > state.maxL) {
+                badge.className = "px-3 py-1.5 rounded-full text-xs font-semibold flex items-center space-x-2 bg-rose-500/20 text-rose-300 border border-rose-500/30";
+                badgeText.textContent = "Deeltje Ontsnapt";
+            } else if (state.k > 0 && Math.abs(particleVel.z) < 0.2 && Math.abs(particlePos.z) > 0.8) {
+                badge.className = "px-3 py-1.5 rounded-full text-xs font-semibold flex items-center space-x-2 bg-amber-500/20 text-amber-300 border border-amber-500/30";
+                badgeText.textContent = "Reflectie nabij Spiegelpunt!";
+            } else {
+                badge.className = "px-3 py-1.5 rounded-full text-xs font-semibold flex items-center space-x-2 bg-emerald-500/20 text-emerald-300 border border-emerald-500/30";
+                badgeText.textContent = state.k === 0 ? "Homogeen Veld (Geen Spiegeling)" : "Spiraal & Spiegeling Actief";
+            }
+        }
+
+        function onWindowResize() {
+            camera.aspect = window.innerWidth / window.innerHeight;
+            camera.updateProjectionMatrix();
+            renderer.setSize(window.innerWidth, window.innerHeight);
+        }
+
+        // --- UI EVENT LISTENERS ---
+        function setupUIEventListeners() {
+            // Controls
+            const btnPlay = document.getElementById('btn-play');
+            if(btnPlay) btnPlay.addEventListener('click', () => togglePlay());
+
+            const btnStep = document.getElementById('btn-step');
+            if(btnStep) btnStep.addEventListener('click', () => {
+                togglePlay(false);
+                const subSteps = 12;
+                const dt = (baseDt * state.simSpeed) / subSteps;
+                for (let i = 0; i < subSteps; i++) {
+                    rk4Step(dt);
+                }
+                trailPoints.push(particlePos.clone());
+                if (trailPoints.length > maxTrailPoints) trailPoints.shift();
+                updateTrailBuffer();
+                updateGraphicsAndDashboard();
+            });
+
+            const btnReset = document.getElementById('btn-reset');
+            if(btnReset) btnReset.addEventListener('click', () => {
+                togglePlay(true);
+                resetSimulation();
+            });
+
+            // Sliders & Values
+            const sliderSpeed = document.getElementById('slider-speed');
+            if(sliderSpeed) sliderSpeed.addEventListener('input', (e) => {
+                state.simSpeed = parseFloat(e.target.value);
+                document.getElementById('val-speed').textContent = state.simSpeed.toFixed(1) + "x";
+            });
+
+            const sliderQ = document.getElementById('slider-q');
+            if(sliderQ) sliderQ.addEventListener('input', (e) => {
+                state.q = parseFloat(e.target.value);
+                updateParticleColor();
+            });
+
+            const sliderM = document.getElementById('slider-m');
+            if(sliderM) sliderM.addEventListener('input', (e) => {
+                state.m = parseFloat(e.target.value);
+                document.getElementById('val-m').textContent = state.m.toFixed(1);
+            });
+
+            const sliderVpar = document.getElementById('slider-vpar');
+            if(sliderVpar) sliderVpar.addEventListener('input', (e) => {
+                state.vPar = parseFloat(e.target.value);
+                document.getElementById('val-vpar').textContent = state.vPar.toFixed(1);
+                resetSimulation();
+            });
+
+            const sliderVperp = document.getElementById('slider-vperp');
+            if(sliderVperp) sliderVperp.addEventListener('input', (e) => {
+                state.vPerp = parseFloat(e.target.value);
+                document.getElementById('val-vperp').textContent = state.vPerp.toFixed(1);
+                resetSimulation();
+            });
+
+            const sliderZ0 = document.getElementById('slider-z0');
+            if(sliderZ0) sliderZ0.addEventListener('input', (e) => {
+                state.z0 = parseFloat(e.target.value);
+                document.getElementById('val-z0').textContent = state.z0.toFixed(1);
+                resetSimulation();
+            });
+
+            const sliderB0 = document.getElementById('slider-b0');
+            if(sliderB0) sliderB0.addEventListener('input', (e) => {
+                state.B0 = parseFloat(e.target.value);
+                document.getElementById('val-b0').textContent = state.B0.toFixed(1);
+                rebuildFieldLines();
+                resetSimulation();
+            });
+
+            const sliderK = document.getElementById('slider-k');
+            if(sliderK) sliderK.addEventListener('input', (e) => {
+                state.k = parseFloat(e.target.value);
+                document.getElementById('val-k').textContent = state.k.toFixed(2);
+                rebuildFieldLines();
+                resetSimulation();
+            });
+
+            // Presets
+            function applyPreset(q, m, vPar, vPerp, z0, B0, k) {
+                state.q = q;
+                state.m = m;
+                state.vPar = vPar;
+                state.vPerp = vPerp;
+                state.z0 = z0;
+                state.B0 = B0;
+                state.k = k;
+
+                document.getElementById('slider-q').value = q;
+                document.getElementById('slider-m').value = m;
+                document.getElementById('slider-vpar').value = vPar;
+                document.getElementById('slider-vperp').value = vPerp;
+                document.getElementById('slider-z0').value = z0;
+                document.getElementById('slider-b0').value = B0;
+                document.getElementById('slider-k').value = k;
+
+                document.getElementById('val-m').textContent = m.toFixed(1);
+                document.getElementById('val-vpar').textContent = vPar.toFixed(1);
+                document.getElementById('val-vperp').textContent = vPerp.toFixed(1);
+                document.getElementById('val-z0').textContent = z0.toFixed(1);
+                document.getElementById('val-b0').textContent = B0.toFixed(1);
+                document.getElementById('val-k').textContent = k.toFixed(2);
+
+                updateParticleColor();
+                rebuildFieldLines();
+                togglePlay(true);
+                resetSimulation();
+            }
+
+            document.getElementById('preset-trapped')?.addEventListener('click', () => applyPreset(1.0, 1.0, 2.0, 3.0, 0.0, 1.5, 0.08));
+            document.getElementById('preset-escape')?.addEventListener('click', () => applyPreset(1.0, 1.0, 5.0, 1.0, 0.0, 1.5, 0.08));
+            document.getElementById('preset-homogeneous')?.addEventListener('click', () => applyPreset(1.0, 1.0, 2.0, 3.0, 0.0, 1.5, 0.00));
+            document.getElementById('preset-strong-pinch')?.addEventListener('click', () => applyPreset(1.0, 1.0, 2.0, 3.0, 0.0, 1.5, 0.20));
+
+            // Checkboxes
+            document.getElementById('chk-v')?.addEventListener('change', (e) => state.showV = e.target.checked);
+            document.getElementById('chk-v-comp')?.addEventListener('change', (e) => state.showVComp = e.target.checked);
+            document.getElementById('chk-f')?.addEventListener('change', (e) => state.showF = e.target.checked);
+            document.getElementById('chk-f-comp')?.addEventListener('change', (e) => state.showFComp = e.target.checked);
+            document.getElementById('chk-b')?.addEventListener('change', (e) => state.showB = e.target.checked);
+            document.getElementById('chk-fieldlines')?.addEventListener('change', (e) => {
+                state.showFieldLines = e.target.checked;
+                rebuildFieldLines();
+            });
+            document.getElementById('chk-trail')?.addEventListener('change', (e) => {
+                state.showTrail = e.target.checked;
+                updateTrailBuffer();
+            });
+            document.getElementById('chk-axes')?.addEventListener('change', (e) => state.showAxes = e.target.checked);
+
+            // Collapsible Panels Handlers
+            const leftPanel = document.getElementById('left-panel');
+            const rightPanel = document.getElementById('right-panel');
+            const btnCollapseLeft = document.getElementById('btn-collapse-left');
+            const btnExpandLeft = document.getElementById('btn-expand-left');
+            const btnToggleLeftHead = document.getElementById('btn-toggle-left-head');
+            const iconToggleLeft = document.getElementById('icon-toggle-left');
+
+            const btnCollapseRight = document.getElementById('btn-collapse-right');
+            const btnExpandRight = document.getElementById('btn-expand-right');
+            const btnToggleRightHead = document.getElementById('btn-toggle-right-head');
+            const iconToggleRight = document.getElementById('icon-toggle-right');
+
+            let leftOpen = true;
+            let rightOpen = true;
+
+            function toggleLeftPanel(forceState) {
+                leftOpen = (forceState !== undefined) ? forceState : !leftOpen;
+                if (leftOpen) {
+                    leftPanel.classList.remove('-translate-x-full', 'opacity-0', 'pointer-events-none');
+                    btnExpandLeft.classList.add('hidden');
+                    if(iconToggleLeft) iconToggleLeft.className = "fa-solid fa-chevron-left ml-1 text-slate-400";
+                } else {
+                    leftPanel.classList.add('-translate-x-full', 'opacity-0', 'pointer-events-none');
+                    btnExpandLeft.classList.remove('hidden');
+                    if(iconToggleLeft) iconToggleLeft.className = "fa-solid fa-chevron-right ml-1 text-slate-400";
+                }
+            }
+
+            function toggleRightPanel(forceState) {
+                rightOpen = (forceState !== undefined) ? forceState : !rightOpen;
+                if (rightOpen) {
+                    rightPanel.classList.remove('translate-x-full', 'opacity-0', 'pointer-events-none');
+                    btnExpandRight.classList.add('hidden');
+                    if(iconToggleRight) iconToggleRight.className = "fa-solid fa-chevron-right mr-1 text-slate-400";
+                } else {
+                    rightPanel.classList.add('translate-x-full', 'opacity-0', 'pointer-events-none');
+                    btnExpandRight.classList.remove('hidden');
+                    if(iconToggleRight) iconToggleRight.className = "fa-solid fa-chevron-left mr-1 text-slate-400";
+                }
+            }
+
+            if(btnCollapseLeft) btnCollapseLeft.addEventListener('click', () => toggleLeftPanel(false));
+            if(btnExpandLeft) btnExpandLeft.addEventListener('click', () => toggleLeftPanel(true));
+            if(btnToggleLeftHead) btnToggleLeftHead.addEventListener('click', () => toggleLeftPanel());
+
+            if(btnCollapseRight) btnCollapseRight.addEventListener('click', () => toggleRightPanel(false));
+            if(btnExpandRight) btnExpandRight.addEventListener('click', () => toggleRightPanel(true));
+            if(btnToggleRightHead) btnToggleRightHead.addEventListener('click', () => toggleRightPanel());
+
+            // Modal Theory
+            const modalTheory = document.getElementById('modal-theory');
+            const btnTheoryModal = document.getElementById('btn-theory-modal');
+            const btnCloseModal = document.getElementById('btn-close-modal');
+            const btnCloseModalBottom = document.getElementById('btn-close-modal-bottom');
+
+            function openTheoryModal() {
+                modalTheory.classList.remove('hidden');
+                if (window.MathJax && window.MathJax.typesetPromise) {
+                    MathJax.typesetPromise();
+                }
+            }
+
+            function closeTheoryModal() {
+                modalTheory.classList.add('hidden');
+            }
+
+            if(btnTheoryModal) btnTheoryModal.addEventListener('click', openTheoryModal);
+            if(btnCloseModal) btnCloseModal.addEventListener('click', closeTheoryModal);
+            if(btnCloseModalBottom) btnCloseModalBottom.addEventListener('click', closeTheoryModal);
+
+            // Modal Info
+            const modalInfo = document.getElementById('modal-info');
+            const btnInfoModal = document.getElementById('btn-info-modal');
+            const btnCloseInfoModal = document.getElementById('btn-close-info-modal');
+            const btnCloseInfoModalBottom = document.getElementById('btn-close-info-modal-bottom');
+
+            function openInfoModal() {
+                modalInfo.classList.remove('hidden');
+                if (window.MathJax && window.MathJax.typesetPromise) {
+                    MathJax.typesetPromise();
+                }
+            }
+
+            function closeInfoModal() {
+                modalInfo.classList.add('hidden');
+            }
+
+            if(btnInfoModal) btnInfoModal.addEventListener('click', openInfoModal);
+            if(btnCloseInfoModal) btnCloseInfoModal.addEventListener('click', closeInfoModal);
+            if(btnCloseInfoModalBottom) btnCloseInfoModalBottom.addEventListener('click', closeInfoModal);
+        }
+    </script>
+</body>
+</html>
